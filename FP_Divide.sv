@@ -3,9 +3,9 @@
 // Company: 
 // Engineer: 
 // 
-// Create Date: 04/12/2022 03:12:52 PM
+// Create Date: 04/12/2022 09:39:13 PM
 // Design Name: 
-// Module Name: FP_Divide
+// Module Name: FP_div
 // Project Name: 
 // Target Devices: 
 // Tool Versions: 
@@ -20,263 +20,125 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 
+module get_sign(A, B, sign); // this is to get the sign of the output
+  input A, B;
+  output sign;
 
-module FP_Divider
-    (
-     input   [31:0]  A,
-     input   [31:0]  B,
-     output  reg [31:0]  C
-    );
+  xor(sign,A,B);
+endmodule
+//This is now directly implemented in the division module
+//module get_exp(A,B, exp);// this is to get the exponent of the result. depending on the division of the mantissa this value will be altered
+//  input [7:0] A, B;
+//  output [7:0]exp;
+//  assign exp = A - B +8'd127; // we subract 127 because exponents are stored in excess 128 form.
+//endmodule
+
+module division (i_divisor, i_dividend, result, done, expo, except, expA, expB);
+  //reg [23:0];
+  input wire [7:0] expA, expB;
+  input [31:0]i_dividend, i_divisor;
+  reg [23:0]quotient=0;
+  reg [7:0]exponent_diff = 8'd0;
+  output reg [7:0]expo=0;
+  reg first_bit = 1'b0;
+  output reg done = 1'b0;
+  output reg [22:0]result=0;
+  output reg [1:0]except=0;
+  reg [32:0] dividend=0, divisor=0;
+
+  always @ ( i_divisor, i_dividend, expA, expB) begin 
+    dividend = i_dividend;
+    divisor = i_divisor;
+    done = 0;
+    quotient=0;
+    exponent_diff = 0;
+    first_bit = 0;
+    except=0;
     
     
-    /*
-                            Data Width = 32,
-                            Exponent Width = 8,
-                            Mantissa Width = 23,
-                            Dividend_Data_Width = 47,
-                            Divisor_Data_Width = 24
-    */
+    
+    
+    if (divisor[31:0] == 32'b0 && expB[7:0] == 8'b0 && done == 1'b0) begin
+      except = 2'b00;
+      done = 1'b1;
+      result = 23'b0;
+      expo = 8'b0;
+    end
+    if (dividend[31:0] == 32'b0 && expA[7:0] == 8'b0 && done == 1'b0) begin
+      result = 23'b0;
+      expo = 8'b0;
+      done = 1'b1;
+    end
+    if(done == 1'b0) begin
+      while (quotient[23] != 1'b1) begin
+        if (dividend >= divisor) begin
+          dividend = dividend - divisor;    // here we just subtract the divisor from the dividend and shift the dividend left.
+          dividend = dividend << 1;
+          quotient = {quotient[22:0], 1'b1}; // this is to shift the quotient left and add 1 to the lsb.
+          if (first_bit == 1'b0) begin
+            first_bit = 1'b1;
+          end
+        end else begin
+          dividend = dividend << 1;
+          quotient = {quotient[22:0], 1'b0};
+          if (first_bit == 1'b0) begin             //until we get the first bit i.e. the first time the divisor is less than the dividend the exponent value will decrease
+            exponent_diff = exponent_diff + 1;
+          end
+        end
 
-logic [15:0] softfloat_approxRecip_1k0s[15:0] = {
-    16'hFFC4, 16'hF0BE, 16'hE363, 16'hD76F, 16'hCCAD, 16'hC2F0, 16'hBA16, 16'hB201,
-    16'hAA97, 16'hA3C6, 16'h9D7A, 16'h97A6, 16'h923C, 16'h8D32, 16'h887E, 16'h8417};
-
-logic [15:0] softfloat_approxRecip_1k1s[15:0] = {
-    16'hF0F1, 16'hD62C, 16'hBFA1, 16'hAC77, 16'h9C0A, 16'h8DDB, 16'h8185, 16'h76BA,
-    16'h6D3B, 16'h64D4, 16'h5D5C, 16'h56B1, 16'h50B6, 16'h4B55, 16'h4679, 16'h4211};
-
-
-
-logic [4:0] softfloat_countLeadingZeros8[ 255:0 ] = {
-    8, 7, 6, 6, 5, 5, 5, 5, 4, 4, 4, 4, 4, 4, 4, 4,
-    3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
-    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
-};
-
-
-
-
-
-
-
-
-        reg signA ;             // 1 bit sign
-        reg [7:0]  expA;  // [30:23] 8 bit exponent
-        reg [23:0] sigA;   // 24 bit mantissa
-        
-        reg signB ;             // 1 bit sign
-        reg [7:0]  expB;  // [30:23] 8 bit exponent
-        reg [23:0] sigB;   // 24 bit mantissa
-        
-        
-        reg signZ = signA ^ signB; // sign of result
-        reg [7:0] expZ;
-        reg [23:0] sigZ;
-        /*------------------------------------------------------------------------
-        *------------------------------------------------------------------------*/
-        //reg [63:0] sig64A;   
-        reg [63:0] rem=0;   
-         
-        reg [63:0] sigR;              
-        reg [31:0] shiftCount;
-        reg [31:0] count;
-        reg [4:0] index;
-        reg [31:0] eps, r0;
-        reg [31:0] sigma0;
-        reg [31:0] sqrSigma0;
-  
-        /*------------------------------------------------------------------------
-        *------------------------------------------------------------------------*/
-                
-        always_comb begin
-        
-        signA = A[31];             // 1 bit sign
-        expA  = A[30:23];  // [30:23] 8 bit exponent
-        sigA  = A[23:0];   // 24 bit mantissa
-        
-        signB = B[31];             // 1 bit sign
-        expB  = B[30:23];  // [30:23] 8 bit exponent
-        sigB  = B[23:0];   // 24 bit mantissa
-                
-                
-        signZ = signA ^ signB; // sign of result
-                        
-        
-        if ( expA == 8'hFF )
-        begin
-            if ( sigA != 0 ) C = 32'h7fc00000;            // assign defaultNaNF32UI goto propagateNaN;
-            if ( expB == 8'hFF )
-            begin
-                if ( sigB != 0 ) C = 32'h7fc00000;       // assign defaultNaNF32UI goto propagateNaN;
-                
-                C = 32'h7fc00000;                   // assign defaultNaNF32UI goto invalid;
+        if (dividend[31:0] == 32'b0 && done == 1'b0) begin
+          while (quotient[23] != 1'b1) begin
+            quotient = quotient << 1;
+            if(first_bit == 1'b0) begin           // if we haven got a first_bit by now give output 0.
+              result = 23'b0;
+              expo = 8'b0;
+              done = 1'b1;
+              //break;
             end
-            C = {signZ, 8'hFF, 23'b000_0000_0000_0000_0000_0000};  // goto infinity;
+          end
         end
-        
-        
-        if ( expB == 8'hFF )
-        begin
-            if ( sigB != 0 ) C = 32'h7fc00000;       // assign defaultNaNF32UI goto propagateNaN;
-            C = {signZ, 8'h00, 23'b000_0000_0000_0000_0000_0000}; // assign zero goto zero;
+      end
+      if (done == 1'b0) begin
+        expo = expA - expB +8'd127;
+        //get_exp exp_out (.A(expA), .B(expB), .exp(expo));
+        expo = expo - exponent_diff;
+        if (expo[7] == 0 && expA >= 128 && expB < 128) begin
+          done = 1'b1;
+          except = 2'b10;
+        end else if (expo[7] == 1 && expA < 128 && expB >= 128) begin
+          done = 1'b1;
+          except = 2'b01;
         end
-        /*------------------------------------------------------------------------
-        *------------------------------------------------------------------------*/
-        if ( expB == 0 )
-        begin
-            if ( ! (sigB == 0) )
-            begin
-                if ( ! (expA == 0  | sigA) ) C = 32'h7fc00000;          // assign defaultNaNF32UI goto invalid;
-                // softfloat_raiseFlags( softfloat_flag_infinite );
-                C = {signZ, 8'hFF, 23'b000_0000_0000_0000_0000_0000};  // assign infinity; goto infinity;
-            end
-            
-         
-             count = 0;
-             if ( sigB < 'h10000 )
-             begin
-                 count = 16;
-                 sigB = sigB << 16;
-             end
-             
-             if ( sigB < 'h1000000 )
-             begin
-                 count = count + 8;
-                 sigB = sigB << 8;
-             end
-             count = count + softfloat_countLeadingZeros8[sigB>>24];
-
-            
-            shiftCount = count - 8;
-                        
-            expB        = 1 - shiftCount;
-            sigB    = sigB<<shiftCount;
-
-            
-            //softfloat_normSubnormalF32Sig M1( sigB, expB, sigB );
+        if (quotient[23] == 1) begin
+          result = quotient[22:0];
+          done = 1'b1;
         end
-        
-        if ( ! (expA == 0) )
-        begin
-            if ( ! sigA ) C = {signZ, 8'h00, 23'b000_0000_0000_0000_0000_0000}; // assign zero goto zero;
-            
-            //softfloat_normSubnormalF32Sig( sigA, expA, sigA );
-
-
-             count = 0;
-             if ( sigA < 'h10000 )
-             begin
-                 count = 16;
-                 sigA = sigA << 16;
-             end
-             
-             if ( sigA < 'h1000000 )
-             begin
-                 count = count + 8;
-                 sigA = sigA << 8;
-             end
-             count = count + softfloat_countLeadingZeros8[sigA>>24];
-
-            
-            shiftCount = count - 8;
-            expA        = 1 - shiftCount;
-            sigA        = sigA<<shiftCount;
-
-        end
-        
-        
-        /*------------------------------------------------------------------------
-        *------------------------------------------------------------------------*/
-        
-        
-        expZ = expA - expB + 8'h7E;
-
-        sigA = sigA | 32'h00800000;
-        sigB = sigB | 32'h00800000;
-
-
-/* #ifdef SOFTFLOAT_FAST_DIV64TO32
-        if ( sigA < sigB )
-        begin
-            assign expZ = expZ - 1;
-            assign sig64A = sigA<<31;
-        end 
-        else
-            assign sig64A =  sigA<<30;
- 
- 
-        sigZ = sig64A / sigB;
-        
-        
-        if ( ! (sigZ & 8'h3F) ) 
-            sigZ = sigZ | ( sigB * sigZ != sig64A);
-    
-    #else
-    begin
-    */
-        if ( sigA < sigB )
-        begin
-            expZ = expZ -1;
-            sigA = sigA << 8;
-        end
-        else
-            sigA = sigA << 7;
-            
-        sigB = sigB << 8;
-       // softfloat_approxRecip32_1( sigB, sigR );
-        index = sigB>>27 & 4'hF;
-        eps = sigB>>11;
-        r0 = softfloat_approxRecip_1k0s[index] - ((softfloat_approxRecip_1k1s[index] * eps)>>20);
-        sigma0 = ~(r0 * sigB)>>7;
-        sigR = (r0<<16) + ((r0 * sigma0)>>24);
-        sqrSigma0 = (sigma0 * sigma0)>>32;
-        sigR = sigR + (sigR * sqrSigma0)>>48;
-
-        
-        
-        
-        
-        sigZ = sigA * sigR>>32;
-        /*------------------------------------------------------------------------
-        *------------------------------------------------------------------------*/
-        sigZ = sigZ + 2;
-        if ( (sigZ & 8'h3F) < 2 )
-        begin
-            sigZ = sigZ & ~3;
-            
-    //#ifdef SOFTFLOAT_FAST_INT64
-    //        rem = ((uint_fast64_t) sigA<<31) - (uint_fast64_t) sigZ * sigB;
-    //#else
-    rem = ( sigA<<32) -  (sigZ<<1) * sigB;
-    //#endif
-    if ( rem & ( 64'h8000000000000000 ) )
-    begin
-        sigZ = sigZ - 4;
-    end 
-    else
-    begin
-      if ( rem ) sigZ = sigZ | 1;
+      end
     end
-    
-    
-    end
-    //#endif
-        C =  {signZ, expZ, sigZ};
-        /*------------------------------------------------------------------------
-        *------------------------------------------------------------------------*/
+  end
 
-    end
+
+endmodule // division
+
+//This module is the main module where all the sub modules will be included
+
+module fpdiv(AbyB, DONE, EXCEPTION, InputA, InputB);
+input [31:0] InputA, InputB;
+output [31:0] AbyB;
+output DONE;
+output [1:0] EXCEPTION;
+wire [7:0]  expAbyB;
+wire [22:0]  mantAbyB;
+reg  signAbyB;
+wire [32:0] temp_divisor, temp_dividend;
+assign temp_divisor = {1'b1,InputB[23:0],7'd0};
+assign temp_dividend = {1'b1,InputA[23:0],7'd0};
+get_sign s_out (.A(InputA[31]), .B(InputB[31]), .sign(signAbyB));
+division divide (.i_divisor({1'b1,InputB[22:0],8'd0}), 
+                 .i_dividend({1'b1,InputA[22:0],8'd0}), 
+                 .result(mantAbyB), .done(DONE), 
+                 .expo(expAbyB), .except(EXCEPTION), 
+                 .expA(InputA[30:23]), .expB(InputB[30:23]));
+assign AbyB = {signAbyB,expAbyB,mantAbyB};
+
 endmodule
