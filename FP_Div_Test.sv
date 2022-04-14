@@ -8,16 +8,6 @@
 // Module Name: FP_Div_Test
 // Project Name: 
 // Target Devices: 
-`timescale 1ns / 1ps
-//////////////////////////////////////////////////////////////////////////////////
-// Company: 
-// Engineer: 
-// 
-// Create Date: 04/12/2022 05:13:45 PM
-// Design Name: 
-// Module Name: FP_Div_Test
-// Project Name: 
-// Target Devices: 
 // Tool Versions: 
 // Description: 
 // 
@@ -29,57 +19,63 @@
 // 
 //////////////////////////////////////////////////////////////////////////////////
 
-
 module booth_test;
 
 reg [31:0] A, B;
-reg DONE;
-reg [1:0] EXCEPTION;
-reg [31:0] result;
-real value;
-fpdiv tester( result, DONE, EXCEPTION, A, B);
-
-
+wire DONE;
+wire [31:0] result;
+shortreal value; 
+shortreal valueA, valueB;
+real EPSILON=0.000001;
+real error;  
+  
+integer i, fail=0, pass=0;
+fpdiv tester( result, A, B);
 
 
 initial  
 begin
-A = 32'b0_01111110_01010001111010111000010;  // 0.66
-B = 32'b0_01111110_00000101000111101011100;  // 0.51
-#200
-A = 32'b0_10000001_00001100110011001100110;  // 4.2 
-B = 32'b0_10000000_10011001100110011001101;  // 3.2
-#200
-A = 32'hC0CCCCCD;                               // -6.4 
-B = 32'hBF000000;                               // -0.5
-#200
-A = 32'h40CCCCCD;                               // 6.4
-B = 32'hBF000000;                               // -0.5
-#200
-A = 32'h4034b4b5; //2.82
-B = 32'h3f70f0f1; //0.94
-end
 
+// CORNER CASES
+A = 32'h3F28F5C3;  // 0.66
+B = 32'h3F028F5C;  // 0.51
 
-
-initial
-begin
-#150
-value =(2**(result[30:23]-127))*($itor({1'b1,result[22:0]})/2**23)*((-1)**(result[31]));
+#15
+  value =$bitstoshortreal(result);
 $display("Expected Value : %f Result : %f",0.66/0.51,value);
-#200
-value =(2**(result[30:23]-127))*($itor({1'b1,result[22:0]})/2**23)*((-1)**(result[31]));
-$display("Expected Value : %f Result : %f",4.2/3.2,value);
-#200
-value =(2**(result[30:23]-127))*($itor({1'b1,result[22:0]})/2**23)*((-1)**(result[31]));
-$display("Expected Value : %f Result : %f",(-6.4)/(-0.5),value);
-#200
-value =(2**(result[30:23]-127))*($itor({1'b1,result[22:0]})/2**23)*((-1)**(result[31]));
-$display("Expected Value : %f Result : %f",6.4/(-0.5),value);
-#200
-value =(2**(result[30:23]-127))*($itor({1'b1,result[22:0]})/2**23)*((-1)**(result[31]));
-$display("Expected Value : %f Result : %f",2.82/0.94,value);
-$finish;
+
+
+
+
+
+
+
+// GENRAL CASES
+  for(i =0 ; i < 100; i=i+1) begin
+#100
+  valueA = $random;
+  valueB = $random;
+  A =$shortrealtobits(valueA);
+  B =$shortrealtobits(valueB);
+  #15
+  value =$bitstoshortreal(result);
+  error = (value - (valueA/valueB));
+  error = error < 0 ? -error : error;
+  
+  
+    if( error < EPSILON ) begin
+   
+    $display("Passed for A = %f and B = %f, expected : %f got : %f",valueA,valueB,valueA/valueB,value);
+  	pass = pass + 1;
+    end
+
+  else begin
+    $display("Failed for A = %f and B = %f, expected : %f got : %f",valueA,valueB,valueA/valueB,value);
+  	fail = fail + 1;
+end
+end	
+  $display("No. of Passes = %f and No. of Fails = %f",pass,fail);
+	
 end
 
 
