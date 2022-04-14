@@ -1,10 +1,11 @@
+// Code your design here
 `timescale 1ns / 1ps
 //////////////////////////////////////////////////////////////////////////////////
-// Company: 
-// Engineer: 
+// Company: 10xEngineers
+// Engineer: Umer Shahid
 // 
 // Create Date: 04/12/2022 09:39:13 PM
-// Design Name: 
+// Design Name: Floating Point Division
 // Module Name: FP_div
 // Project Name: 
 // Target Devices: 
@@ -33,7 +34,7 @@ endmodule
 //  assign exp = A - B +8'd127; // we subract 127 because exponents are stored in excess 128 form.
 //endmodule
 
-module division (i_divisor, i_dividend, result, done, expo, except, expA, expB);
+module division (i_divisor, i_dividend, result, expo, expA, expB);
   //reg [23:0];
   input wire [7:0] expA, expB;
   input [31:0]i_dividend, i_divisor;
@@ -41,9 +42,8 @@ module division (i_divisor, i_dividend, result, done, expo, except, expA, expB);
   reg [7:0]exponent_diff = 8'd0;
   output reg [7:0]expo=0;
   reg first_bit = 1'b0;
-  output reg done = 1'b0;
+  reg done = 1'b0;
   output reg [22:0]result=0;
-  output reg [1:0]except=0;
   reg [32:0] dividend=0, divisor=0;
 
   always @ ( i_divisor, i_dividend, expA, expB) begin 
@@ -53,13 +53,11 @@ module division (i_divisor, i_dividend, result, done, expo, except, expA, expB);
     quotient=0;
     exponent_diff = 0;
     first_bit = 0;
-    except=0;
     
     
     
     
     if (divisor[31:0] == 32'b0 && expB[7:0] == 8'b0 && done == 1'b0) begin
-      except = 2'b00;
       done = 1'b1;
       result = 23'b0;
       expo = 8'b0;
@@ -104,10 +102,8 @@ module division (i_divisor, i_dividend, result, done, expo, except, expA, expB);
         expo = expo - exponent_diff;
         if (expo[7] == 0 && expA >= 128 && expB < 128) begin
           done = 1'b1;
-          except = 2'b10;
         end else if (expo[7] == 1 && expA < 128 && expB >= 128) begin
           done = 1'b1;
-          except = 2'b01;
         end
         if (quotient[23] == 1) begin
           result = quotient[22:0];
@@ -122,22 +118,20 @@ endmodule // division
 
 //This module is the main module where all the sub modules will be included
 
-module fpdiv(AbyB, DONE, EXCEPTION, InputA, InputB);
+module fpdiv(AbyB, InputA, InputB);
 input [31:0] InputA, InputB;
 output [31:0] AbyB;
-output DONE;
-output [1:0] EXCEPTION;
 wire [7:0]  expAbyB;
 wire [22:0]  mantAbyB;
-reg  signAbyB;
+wire  signAbyB;
 wire [32:0] temp_divisor, temp_dividend;
 assign temp_divisor = {1'b1,InputB[23:0],7'd0};
 assign temp_dividend = {1'b1,InputA[23:0],7'd0};
 get_sign s_out (.A(InputA[31]), .B(InputB[31]), .sign(signAbyB));
 division divide (.i_divisor({1'b1,InputB[22:0],8'd0}), 
                  .i_dividend({1'b1,InputA[22:0],8'd0}), 
-                 .result(mantAbyB), .done(DONE), 
-                 .expo(expAbyB), .except(EXCEPTION), 
+                 .result(mantAbyB), 
+                 .expo(expAbyB), 
                  .expA(InputA[30:23]), .expB(InputB[30:23]));
 assign AbyB = {signAbyB,expAbyB,mantAbyB};
 
