@@ -1,3 +1,5 @@
+// Code your testbench here
+// or browse Examples
 `timescale 1ns / 1ps
 //////////////////////////////////////////////////////////////////////////////////
 // Company: 
@@ -26,7 +28,7 @@ wire DONE;
 wire [31:0] result;
 shortreal value; 
 shortreal valueA, valueB;
-real EPSILON=0.000001;
+real EPSILON=0.0001;
 real error;  
   
 integer i, fail=0, pass=0;
@@ -51,7 +53,7 @@ $display("Expected Value : %f Result : %f",0.66/0.51,value);
 
 
 // GENRAL CASES
-  for(i =0 ; i < 100; i=i+1) begin
+  for(i =0 ; i < 500; i=i+1) begin
 #100
   valueA = $random;
   valueB = $random;
